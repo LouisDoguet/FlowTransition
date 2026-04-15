@@ -18,80 +18,19 @@ from lib import OrrSommerfeld, PoiseuilleFlow, CouetteFlow, CustomFlow
 # Wavenumbers: k² = α² + β²  (β=0 for 2-D perturbations)
 # ============================================================
 
-
 # ------------------------------------------------------------
-# 1.  Plane Poiseuille Flow — classical Y-shaped eigenspectrum
-# ------------------------------------------------------------
-# U(y) = 1 - y²,  walls at y = ±1
-# At Re=10000, α=1 one Tollmien-Schlichting mode is unstable.
-# Increase N for better-resolved A, P, S branches.
-
-flow = PoiseuilleFlow()
-
-solver = OrrSommerfeld(
-    flow=flow,
-    Re=10000,     # Reynolds number
-    alpha=1.0,    # streamwise wavenumber α
-    beta=0.,     # spanwise wavenumber β (0 → pure 2-D perturbation)
-    N=128         # Chebyshev resolution — raise to 256 for sharper branches
-)
-
-solver.solve()
-
-# Full Y-shaped eigenspectrum in the complex c-plane
-solver.plot_spectrum(title=r"Plane Poiseuille — Y-Shaped Eigenspectrum  "
-                          r"($Re=10000,\ \alpha=1$)")
-
-# Eigenfunction of the most unstable (Tollmien-Schlichting) mode
-solver.plot_eigenmode(mode_index=0)
-
-# Quick status print
-print(f"Most unstable c = {solver.eigenvalues[0]:.6f}")
-print(f"Temporal growth rate ω_i = α·c_i = {solver.growth_rate:.6f}")
-print(f"Flow is {'UNSTABLE' if solver.is_unstable else 'STABLE'}")
-
-
-# ------------------------------------------------------------
-# 2.  Eigenspectrum sweep over Reynolds numbers
-#     Watch the Y-shape form and one branch cross into c_i > 0
+# Plane Couette Flow — linearly stable for all Re
 # ------------------------------------------------------------
 
-solver.plot_spectrum_grid(
-    Re_values=[1000, 3000, 5772, 8000, 10000, 15000],
-    cols=3,
-    figsize=(15, 9)
-)
-
-
-# ------------------------------------------------------------
-# 3.  Plane Couette Flow — linearly stable for all Re
-# ------------------------------------------------------------
-
+F = CouetteFlow()
 couette_solver = OrrSommerfeld(
-    flow=CouetteFlow(),
-    Re=1000,
-    alpha=1.0,
-    N=64
+    flow=F,
+    Re=400,
+    alpha=0.63,
+    beta=1.26,
+    N=256
 ).solve()
 
+F.plot()
 couette_solver.plot_spectrum()
-
-
-# ------------------------------------------------------------
-# 4.  Custom flow profile — define U(y) as any callable
-# ------------------------------------------------------------
-
-def sinusoidal_profile(y):
-    '''Sinusoidal jet-like profile — inflectional (Rayleigh unstable).'''
-    return np.sin(np.pi * y / 2)
-
-custom_solver = OrrSommerfeld(
-    flow=CustomFlow(sinusoidal_profile, name="Sinusoidal"),
-    Re=5000,
-    alpha=1.0,
-    beta=1.0,
-    N=100
-).solve()
-
-custom_solver.plot_spectrum()
-custom_solver.plot_eigenmode(0)
+couette_solver.plot_eigenmode(3)

@@ -39,6 +39,18 @@ class BaseFlow(ABC):
     def __repr__(self):
         return f"{self.name} flow"
 
+    def plot(self):
+        import matplotlib.pyplot as plt
+
+        y = np.linspace(-1, 1, 100)
+        plt.plot(y, self.U(y), label='U(y)')
+        plt.title(self.name)
+        plt.xlabel('y')
+        plt.ylabel('Flow Velocity')
+        plt.legend()
+        plt.grid()
+        plt.show()
+
 
 class PoiseuilleFlow(BaseFlow):
     '''
