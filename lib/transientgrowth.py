@@ -168,6 +168,23 @@ class TransientGrowth:
         M_mat = self._F @ np.diag(exp_vals) @ self._F_inv
         return np.linalg.svd(M_mat)
 
+    def _compute_eta_opt(self, a_opt):
+        """
+        Compute the wall-normal vorticity profile of the optimal mode:
+
+            η_opt(y) = Σ_j a_opt[j] η_j(y)
+
+        where each η_j is obtained from the forced Squire equation for
+        OS eigenvalue c_j and eigenfunction φ_j.  For β = 0 returns zeros.
+        """
+        N = len(self._solver.y)
+        eta_opt = np.zeros(N, dtype=complex)
+        for j in range(self.n_modes):
+            c_j = self._solver.eigenvalues[j]
+            phi_j = self._solver.eigenvectors[:, j]
+            eta_opt += a_opt[j] * self._solver._solve_squire(c_j, phi_j)
+        return eta_opt
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -323,7 +340,13 @@ class TransientGrowth:
 
     def plot_optimal_mode(self, t, title=None, figsize=(10, 5)):
         """
-        Plot the amplitude and phase of the optimal initial perturbation v_opt(y).
+        Plot the wall-normal velocity Re(v̂_opt) and wall-normal vorticity
+        Re(η̂_opt) of the optimal initial perturbation.
+
+        Both profiles are phase-normalised so that the dominant feature of
+        v̂_opt is real (i.e. the point of maximum amplitude is rotated onto
+        the real axis).  This is equivalent to choosing x = 0 as the
+        reference streamwise position after an appropriate phase shift.
 
         Parameters
         ----------
@@ -331,19 +354,25 @@ class TransientGrowth:
         title  : str, optional
         figsize: tuple
         """
-        y, v_opt, _, G_t = self.optimal_initial_condition(t)
+        y, v_opt, a_opt, G_t = self.optimal_initial_condition(t)
+        eta_opt = self._compute_eta_opt(a_opt)
+
+        # Phase-normalise: rotate both profiles so peak of v̂ lands on real axis
+        phase = np.angle(v_opt[np.argmax(np.abs(v_opt))])
+        v_opt  = v_opt  * np.exp(-1j * phase)
+        eta_opt = eta_opt * np.exp(-1j * phase)
 
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize, sharey=True)
 
-        ax1.plot(np.abs(v_opt), y, color='royalblue', linewidth=2)
-        ax1.set_xlabel(r'$|\hat{v}_{opt}(y)|$', fontsize=13)
+        ax1.plot(v_opt.real, y, color='royalblue', linewidth=2)
+        ax1.axvline(0, color='gray', linewidth=0.6, linestyle='--', alpha=0.4)
+        ax1.set_xlabel(r'$\mathrm{Re}(\hat{v}_{opt})$', fontsize=13)
         ax1.set_ylabel(r'$y$', fontsize=13)
-        ax1.set_xlim(left=0)
         ax1.grid(True, alpha=0.25)
 
-        ax2.plot(np.angle(v_opt), y, color='tomato', linewidth=2)
-        ax2.set_xlabel(r'$\arg(\hat{v}_{opt}(y))$', fontsize=13)
-        ax2.set_xlim([-np.pi, np.pi])
+        ax2.plot(eta_opt.real, y, color='tomato', linewidth=2)
+        ax2.axvline(0, color='gray', linewidth=0.6, linestyle='--', alpha=0.4)
+        ax2.set_xlabel(r'$\mathrm{Re}(\hat{\eta}_{opt})$', fontsize=13)
         ax2.grid(True, alpha=0.25)
 
         if title is None:
