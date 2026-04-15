@@ -75,15 +75,17 @@ class ComPlot:
 
         plt.show()
 
-    def animate_fields(self, fields, title='', interval=100, dynamic_scaling=True):
+    def animate_fields(self, fields, title='', interval=100, dynamic_scaling=True,
+                       frame_labels=None):
         """
         Animate a sequence of precomputed fields.
         
         @param fields: list of objects containing 'Z' attribute (like Space objects) or list of 2D numpy arrays.
         @param title: title of the animation
         @param interval: delay between frames in milliseconds
-        @param dynamic_scaling: If True, normalize color intensity per frame (good for shape). 
+        @param dynamic_scaling: If True, normalize color intensity per frame (good for shape).
                                 If False, normalize against the global max (good for seeing growth/decay).
+        @param frame_labels: optional list of strings, one per frame, appended to the title line.
         """
         
         # Initialize with the first frame
@@ -137,23 +139,26 @@ class ComPlot:
             # Update contours
             cont = ax.contour(self.X, self.Y, np.real(tmpZ), levels=5, colors='black', linewidths=0.5)
             
-            # Update title with amplitude info
-            ax.set_title(f"{title}\nAmplitude: {current_max:.3e}")
+            # Update title with amplitude info (and optional per-frame label)
+            label = f'   {frame_labels[frame_idx]}' if frame_labels else ''
+            ax.set_title(f"{title}{label}\nAmplitude: {current_max:.3e}")
 
             return ax
         
         ani = FuncAnimation(fig, update, frames=len(fields), blit=False, repeat=False, interval=interval)
         plt.show()
 
-    def animate_fields_3d(self, fields, title='', interval=30, dynamic_scaling=True):
+    def animate_fields_3d(self, fields, title='', interval=30, dynamic_scaling=True,
+                          frame_labels=None):
         """
         Animate a sequence of precomputed fields in 3D.
-        
+
         @param fields: list of objects containing 'Z' attribute (like Space objects) or list of 2D numpy arrays.
         @param title: title of the animation
         @param interval: delay between frames in milliseconds
         @param dynamic_scaling: If True, z-axis scales to fit current frame.
                                 If False, z-axis is fixed to global max (good for growth/decay).
+        @param frame_labels: optional list of strings, one per frame, appended to the title line.
         """
         fig = plt.figure(figsize=(10, 8))
         ax = fig.add_subplot(111, projection='3d')
@@ -201,8 +206,9 @@ class ComPlot:
                 lim = max(current_max, 1e-6)
                 ax.set_zlim(-lim, lim)
                 
-            ax.set_title(f"{title}\nAmplitude: {current_max:.3e}")
-            
+            label = f'   {frame_labels[frame_idx]}' if frame_labels else ''
+            ax.set_title(f"{title}{label}\nAmplitude: {current_max:.3e}")
+
             return surf,
 
         ani = FuncAnimation(fig, update, frames=len(fields), blit=False, repeat=False, interval=interval)

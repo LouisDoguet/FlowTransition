@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.linalg import cholesky
+from scipy.interpolate import interp1d
 
 from lib.orrsommerfeld import OrrSommerfeld
 
@@ -413,6 +414,154 @@ class TransientGrowth:
         plt.show()
 
         return fig
+
+    # ------------------------------------------------------------------
+    # Animation helpers
+    # ------------------------------------------------------------------
+
+    def _build_fields(self, t_opt, space, t_array):
+        """
+        Build the list of Space objects for the transient evolution animation.
+
+        The 2-D complex field at each time step is
+
+            Z(x, y, t) = [Σ_j a_j φ_j(y) exp(λ_j t)] · exp(i α x)
+
+        where a_j are the optimal coefficients for target time t_opt,
+        λ_j = −iαc_j are the temporal eigenvalues, and φ_j are the
+        Orr-Sommerfeld eigenfunctions interpolated onto the Space grid.
+
+        Eigenfunctions are defined on the Chebyshev grid ([-1, 1]) and
+        resampled to the uniform y-axis of `space` via cubic splines.
+
+        Parameters
+        ----------
+        t_opt   : float        — target time for which a_opt is computed
+        space   : Space        — 2D grid (y should span [-1, 1])
+        t_array : array-like   — time values for each frame
+
+        Returns
+        -------
+        fields : list of Space  — one entry per element of t_array
+        """
+        # Optimal coefficients for the chosen target time
+        _, _, a_opt, _ = self.optimal_initial_condition(t_opt)
+
+        # Temporal eigenvalues λ_j = −iαc_j
+        lam = -1j * self._solver.alpha * self._solver.eigenvalues[:self.n_modes]
+
+        # --- Interpolate eigenfunctions from Chebyshev grid to Space grid ---
+        y_cheb = self._solver.y                          # (N,)  ordered 1 → -1
+        Psi    = self._solver.eigenvectors[:, :self.n_modes]  # (N, M)
+
+        # Sort ascending in y for interp1d
+        sort_idx  = np.argsort(y_cheb)
+        y_sorted  = y_cheb[sort_idx]                    # (N,) ascending
+        Psi_sorted = Psi[sort_idx, :]                   # (N, M) same ordering
+
+        # Cubic spline, real and imaginary separately (interp1d is real-only)
+        f_re = interp1d(y_sorted, Psi_sorted.real, axis=0,
+                        kind='cubic', bounds_error=False, fill_value=0.0)
+        f_im = interp1d(y_sorted, Psi_sorted.imag, axis=0,
+                        kind='cubic', bounds_error=False, fill_value=0.0)
+        Psi_y = f_re(space._y) + 1j * f_im(space._y)   # (Ny, M)
+
+        # Precompute exp(iαx) on the full 2D grid (constant across frames)
+        exp_iax = np.exp(1j * self._solver.alpha * space.X)  # (Ny, Nx)
+
+        fields = []
+        for t in np.asarray(t_array, dtype=float):
+            # Modal amplitudes at time t
+            coeffs = a_opt * np.exp(lam * t)             # (M,)
+            # Wall-normal envelope: sum over modes
+            v_env = Psi_y @ coeffs                        # (Ny,)
+            # Full 2D field: broadcast v_env over x-axis
+            Z = v_env[:, np.newaxis] * exp_iax           # (Ny, Nx)
+            fields.append(space.duplicate(Z))
+
+        return fields
+
+    # ------------------------------------------------------------------
+    # Animation
+    # ------------------------------------------------------------------
+
+    def animate(self, t_opt, space, t_array,
+                title=None, interval=100, dynamic_scaling=True):
+        """
+        Animate the transient evolution of the optimal initial perturbation.
+
+        The visualisation uses the same phase/amplitude encoding as
+        :class:`ComPlot` (hue = phase, alpha = amplitude) and is produced
+        by the same :meth:`ComPlot.animate_fields` pipeline used for normal
+        modes.
+
+        The field shown is
+
+            Z(x, y, t) = [Σ_j a_j φ_j(y) exp(λ_j t)] · exp(i α x)
+
+        where a_j are the optimal coefficients for the target time t_opt.
+
+        Parameters
+        ----------
+        t_opt          : float       — target optimisation time
+        space          : Space       — 2D spatial domain (ylim should be (-1, 1))
+        t_array        : array-like  — time values for the animation frames
+        title          : str, opt
+        interval       : int         — frame delay in milliseconds (default 100)
+        dynamic_scaling: bool        — per-frame amplitude normalisation
+        """
+        from lib.complexplot import ComPlot
+
+        fields = self._build_fields(t_opt, space, t_array)
+        frame_labels = [f't = {t:.3f}' for t in np.asarray(t_array, dtype=float)]
+
+        if title is None:
+            title = (
+                f"{self._solver.flow.name} — Transient Evolution "
+                f"(Re = {self._solver.Re}, "
+                f"α = {self._solver.alpha}, "
+                f"t_opt = {t_opt})"
+            )
+
+        cp = ComPlot()
+        cp.fromSpace(space)
+        cp.animate_fields(fields, title=title, interval=interval,
+                          dynamic_scaling=dynamic_scaling,
+                          frame_labels=frame_labels)
+
+    def animate_3d(self, t_opt, space, t_array,
+                   title=None, interval=30, dynamic_scaling=True):
+        """
+        Animate the transient evolution of the optimal initial perturbation
+        as a 3D surface of Re(Z).
+
+        Parameters
+        ----------
+        t_opt          : float       — target optimisation time
+        space          : Space       — 2D spatial domain (ylim should be (-1, 1))
+        t_array        : array-like  — time values for the animation frames
+        title          : str, opt
+        interval       : int         — frame delay in milliseconds (default 30)
+        dynamic_scaling: bool        — per-frame z-axis scaling
+        """
+        from lib.complexplot import ComPlot
+
+        fields = self._build_fields(t_opt, space, t_array)
+        frame_labels = [f't = {t:.3f}' for t in np.asarray(t_array, dtype=float)]
+
+        if title is None:
+            title = (
+                f"{self._solver.flow.name} — Transient Evolution 3D "
+                f"(Re = {self._solver.Re}, "
+                f"α = {self._solver.alpha}, "
+                f"t_opt = {t_opt})"
+            )
+
+        cp = ComPlot()
+        cp.fromSpace(space)
+        cp.animate_fields_3d(fields, title=title, interval=interval,
+                             dynamic_scaling=dynamic_scaling,
+                             frame_labels=frame_labels)
 
     # ------------------------------------------------------------------
     # Dunder

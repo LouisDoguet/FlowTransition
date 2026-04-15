@@ -1,6 +1,6 @@
 import numpy as np
 
-from lib import CouetteFlow, PoiseuilleFlow, OrrSommerfeld, TransientGrowth
+from lib import CouetteFlow, OrrSommerfeld, TransientGrowth, Space
 
 # ============================================================
 # Maximum Transient Growth of parallel shear flows
@@ -15,8 +15,8 @@ from lib import CouetteFlow, PoiseuilleFlow, OrrSommerfeld, TransientGrowth
 #   Ψ      = N×M matrix of M selected OS eigenfunctions φ_j(y)
 #   Q      = Ψ^H W Ψ   (M×M kinetic-energy Gram matrix,
 #                        W = diag of Clenshaw-Curtis weights)
-#   Λ      = diag(σ_1, …, σ_M),  σ_j = i α c_j  (temporal eigenvalues)
-#   exp(Λt)= diag(exp(σ_j t))
+#   Λ      = diag(λ_1, …, λ_M),  λ_j = −iαc_j  (temporal eigenvalues)
+#   exp(Λt)= diag(exp(λ_j t))
 #
 # Solution via SVD:  write Q = F^H F (Cholesky) and set b = Fa:
 #
@@ -26,25 +26,24 @@ from lib import CouetteFlow, PoiseuilleFlow, OrrSommerfeld, TransientGrowth
 # the first right singular vector of F exp(Λt) F^{-1}.
 # ============================================================
 
-
 # ------------------------------------------------------------
-# Plane Couette Flow — linearly stable, exhibits strong transient growth
+# Plane Couette Flow — Re=400, α=0.63, β=1.26
 # ------------------------------------------------------------
 
-couette = CouetteFlow()
+flow = CouetteFlow()
 solver = OrrSommerfeld(
-    flow=couette,
-    Re=1000,
-    alpha=1.0,
-    beta=0.0,
-    N=128,
+    flow=flow,
+    Re=400,
+    alpha=0.63,
+    beta=1.26,
+    N=256,
 ).solve()
 
 print(solver)
 print(f"Most unstable eigenvalue: c = {solver.eigenvalues[0]:.6f}")
-print(f"Growth rate:              σ_i = {solver.growth_rate:.6f}")
+print(f"Growth rate:              ω_i = {solver.growth_rate:.6f}")
 
-# --- Transient growth with a selected number of modes --------------------
+# --- Transient growth -------------------------------------------------------
 tg = TransientGrowth(solver, n_modes=50)
 print(tg)
 
@@ -52,47 +51,27 @@ t_array = np.linspace(0, 80, 300)
 G_max, t_max = tg.peak_growth(t_array)
 print(f"\nPeak transient growth: G_max = {G_max:.4f} at t = {t_max:.2f}")
 
-# Plot G(t)
+# G(t) curve
 tg.plot_growth(t_array)
 
-# Plot the optimal initial perturbation at peak time
+# Optimal initial perturbation profiles at peak time
 tg.plot_optimal_mode(t_max)
 
-# Side-by-side: eigenspectrum + growth curve
+# Eigenspectrum + G(t) side by side
 tg.plot_spectrum_and_growth(t_array)
 
-
 # ------------------------------------------------------------
-# Plane Poiseuille Flow — effect of n_modes on the growth curve
+# Animate the transient evolution of the optimal perturbation
 # ------------------------------------------------------------
+# Spatial domain: one streamwise wavelength (2π/α) × channel height [-1, 1]
+lam_x = 2 * np.pi / solver.alpha
+sp = Space((0, lam_x), (-1, 1), 300, 150)
 
-poiseuille = PoiseuilleFlow()
-solver_p = OrrSommerfeld(
-    flow=poiseuille,
-    Re=5000,
-    alpha=1.0,
-    beta=0.0,
-    N=128,
-).solve()
+# Time array spanning the full growth-then-decay cycle (0 → 2 t_max)
+t_anim = np.linspace(0, 2 * t_max, 200)
 
-t_array_p = np.linspace(0, 50, 300)
+# 2-D phase/amplitude view (hue = phase, alpha = amplitude)
+tg.animate(t_max, sp, t_anim, dynamic_scaling=False)
 
-import matplotlib.pyplot as plt
-fig, ax = plt.subplots(figsize=(8, 5))
-
-for n_modes in [10, 30, 60, 128]:
-    tg_p = TransientGrowth(solver_p, n_modes=n_modes)
-    G_arr = tg_p.compute(t_array_p)
-    ax.plot(t_array_p, G_arr, label=f"M = {n_modes}")
-
-ax.axhline(1.0, color='gray', linewidth=0.8, linestyle='--', alpha=0.5)
-ax.set_xlabel(r'$t$', fontsize=13)
-ax.set_ylabel(r'$G(t)$', fontsize=13)
-ax.set_title(
-    f"{poiseuille.name} — Transient Growth vs number of modes\n"
-    f"Re = {solver_p.Re},  α = {solver_p.alpha}"
-)
-ax.legend()
-ax.grid(True, alpha=0.25)
-plt.tight_layout()
-plt.show()
+# 3-D surface view of Re(v)
+tg.animate_3d(t_max, sp, t_anim, dynamic_scaling=False)
