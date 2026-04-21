@@ -33,8 +33,12 @@ def _cheb(N):
     c[-1] = 2.0
     c *= (-1.0)**j
 
+    # np.tile(y, (N, 1)) creates Y[i,j] = y[j]  (rows are copies of y).
+    # Y.T[i,j] = y[i], so  Y.T - Y  gives  dY[i,j] = y[i] - y[j],
+    # matching Trefethen's formula D[i,j] = (c_i/c_j) / (y_i - y_j).
+    # Using  Y - Y.T  (the reverse) would give -d/dξ instead of +d/dξ.
     Y = np.tile(y, (N, 1))
-    dY = Y - Y.T
+    dY = Y.T - Y                          # dY[i,j] = y[i] - y[j]  ← correct sign
 
     # Avoid division by zero on the diagonal; we'll overwrite it
     np.fill_diagonal(dY, 1.0)

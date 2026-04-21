@@ -1,6 +1,7 @@
 import numpy as np
 
 from lib import CouetteFlow, OrrSommerfeld, TransientGrowth, Space
+from lib.baseflow import PoiseuilleFlow
 
 # ============================================================
 # Maximum Transient Growth of parallel shear flows
@@ -30,14 +31,17 @@ from lib import CouetteFlow, OrrSommerfeld, TransientGrowth, Space
 # Plane Couette Flow — Re=400, α=0.63, β=1.26
 # ------------------------------------------------------------
 
-flow = CouetteFlow()
+flow = PoiseuilleFlow()
+flow.plot()
 solver = OrrSommerfeld(
     flow=flow,
-    Re=400,
-    alpha=0.63,
-    beta=1.26,
+    Re=10000,
+    alpha=1,
+    beta=0,
     N=256,
 ).solve()
+
+solver.plot_spectrum()
 
 print(solver)
 print(f"Most unstable eigenvalue: c = {solver.eigenvalues[0]:.6f}")
@@ -65,7 +69,7 @@ tg.plot_spectrum_and_growth(t_array)
 # ------------------------------------------------------------
 # Spatial domain: one streamwise wavelength (2π/α) × channel height [-1, 1]
 lam_x = 2 * np.pi / solver.alpha
-sp = Space((0, lam_x), (-1, 1), 300, 150)
+sp = Space((0, 2*lam_x), (-1, 1), 300, 150)
 
 # Time array spanning the full growth-then-decay cycle (0 → 2 t_max)
 t_anim = np.linspace(0, 2 * t_max, 200)
